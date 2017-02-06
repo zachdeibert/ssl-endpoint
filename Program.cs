@@ -63,15 +63,22 @@ namespace sslendpoint {
 			X509Store store = new X509Store(StoreName.My, StoreLocation.CurrentUser);
 			store.Open(OpenFlags.ReadWrite);
 			X509CertificateCollection certs = store.Certificates.Find(X509FindType.FindBySubjectName, SslIp, false);
-			if (certs.Count > 0) {
-				Cert = (X509Certificate2) certs[0];
-				CspParameters cp = new CspParameters();
-				cp.KeyContainerName = string.Format("github-zachdeibert-ssl-endpoint-", SslIp);
-				Cert.PrivateKey = new RSACryptoServiceProvider(cp);
-			} else {
-				GenerateSSLCert();
-				store.Add(Cert);
-			}
+			do {
+				if (certs.Count > 0) {
+					Cert = (X509Certificate2) certs[0];
+					if (Cert.NotAfter < DateTime.Now) {
+						store.Remove(Cert);
+						Cert = null;
+						continue;
+					}
+					CspParameters cp = new CspParameters();
+					cp.KeyContainerName = string.Format("github-zachdeibert-ssl-endpoint-", SslIp);
+					Cert.PrivateKey = new RSACryptoServiceProvider(cp);
+				} else {
+					GenerateSSLCert();
+					store.Add(Cert);
+				}
+			} while (Cert == null);
 			store.Close();
 		}
 
