@@ -114,7 +114,7 @@ namespace sslendpoint {
 				using (TcpClient client = new TcpClient(ip, port)) {
 					return client.Connected;
 				}
-			} catch (SocketException) {
+			} catch (Exception) {
 			}
 			return false;
 		}
@@ -136,7 +136,14 @@ namespace sslendpoint {
 		}
 
 		private static void MainLoop(string listenIp, int listenPort, string toIp, int toPort, Func<Stream, Stream> listenStream, Func<Stream, Stream> toStream) {
-			IPAddress[] addrs = Dns.GetHostAddresses(listenIp);
+            IPAddress[] addrs;
+            try {
+                addrs = Dns.GetHostAddresses(listenIp);
+            } catch (Exception) {
+                addrs = new IPAddress[] {
+                    IPAddress.Parse(listenIp)
+                };
+            }
 			if (addrs.Length > 0) {
 				TcpListener listener = new TcpListener(addrs[0], listenPort);
 				try {
