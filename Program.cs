@@ -1,11 +1,22 @@
 ﻿using System;
 using System.IO;
 using System.Net;
-using System.Net.Sockets;
 using System.Net.Security;
+using System.Net.Sockets;
 using System.Security.Cryptography;
-using System.Security.Cryptography.X509Certificates;
 using System.Threading;
+using Org.BouncyCastle.Asn1;
+using Org.BouncyCastle.Asn1.Pkcs;
+using Org.BouncyCastle.Asn1.X509;
+using Org.BouncyCastle.Crypto;
+using Org.BouncyCastle.Crypto.Generators;
+using Org.BouncyCastle.Crypto.Operators;
+using Org.BouncyCastle.Crypto.Parameters;
+using Org.BouncyCastle.Crypto.Prng;
+using Org.BouncyCastle.Math;
+using Org.BouncyCastle.Pkcs;
+using Org.BouncyCastle.Security;
+using Org.BouncyCastle.X509;
 
 namespace sslendpoint {
 	static class MainClass {
@@ -13,7 +24,7 @@ namespace sslendpoint {
 		private static int SslPort;
 		private static string PlainIp;
 		private static int PlainPort;
-		private static X509Certificate2 Cert;
+		private static System.Security.Cryptography.X509Certificates.X509Certificate2 Cert;
 
 		private static void ParseArgs(string[] args) {
 			if (args.Length < 1) {
@@ -45,35 +56,51 @@ namespace sslendpoint {
 		}
 
 		private static void GenerateSSLCert() {
-			CspParameters cp = new CspParameters();
-			cp.KeyContainerName = string.Format("github-zachdeibert-ssl-endpoint-", SslIp);
-			RSACryptoServiceProvider rsa = new RSACryptoServiceProvider(cp);
-			Mono.Security.X509.X509CertificateBuilder bldr = new Mono.Security.X509.X509CertificateBuilder();
+			CryptoApiRandomGenerator randomGenerator = new CryptoApiRandomGenerator();
+			SecureRandom random = new SecureRandom(randomGenerator);
+			X509V3CertificateGenerator certificateGenerator = new X509V3CertificateGenerator();
+			X509Name subjectDN = new X509Name(string.Concat("CN=", SslIp));
+			certificateGenerator.SetIssuerDN(subjectDN);
+			certificateGenerator.SetSubjectDN(subjectDN);
 			DateTime now = DateTime.UtcNow;
-			bldr.NotAfter = now.AddYears(10);
-			bldr.NotBefore = now;
-			bldr.IssuerName = bldr.SubjectName = string.Concat("CN=", SslIp);
-			bldr.SubjectPublicKey = rsa;
-			byte[] cert = bldr.Sign(rsa);
-			Cert = new X509Certificate2(cert);
-			Cert.PrivateKey = rsa;
+			certificateGenerator.SetNotBefore(now);
+			certificateGenerator.SetNotAfter(now.AddYears(10));
+			certificateGenerator.SetSerialNumber(BigInteger.One);
+			KeyGenerationParameters genParams = new KeyGenerationParameters(random, 2048);
+			RsaKeyPairGenerator generator = new RsaKeyPairGenerator();
+			generator.Init(genParams);
+			AsymmetricCipherKeyPair kp = generator.GenerateKeyPair();
+			certificateGenerator.SetPublicKey(kp.Public);
+			X509Certificate cert = certificateGenerator.Generate(new Asn1SignatureFactory("SHA512WITHRSA", kp.Private, random));
+			PrivateKeyInfo info = PrivateKeyInfoFactory.CreatePrivateKeyInfo(kp.Private);
+			Cert = new System.Security.Cryptography.X509Certificates.X509Certificate2(DotNetUtilities.ToX509Certificate(cert));
+			Asn1Sequence seq = (Asn1Sequence) Asn1Object.FromByteArray(info.ParsePrivateKey().GetDerEncoded());
+			RsaPrivateKeyStructure rsa = RsaPrivateKeyStructure.GetInstance(seq);
+			RsaPrivateCrtKeyParameters rsaParams = new RsaPrivateCrtKeyParameters(rsa.Modulus, rsa.PublicExponent, rsa.PrivateExponent, rsa.Prime1, rsa.Prime2, rsa.Exponent1, rsa.Exponent2, rsa.Coefficient);
+			RSA priv = DotNetUtilities.ToRSA(rsaParams);
+			Cert.PrivateKey = priv;
+			CspParameters csp = new CspParameters();
+			csp.KeyContainerName = string.Concat("github-zachdeibert-ssl-endpoint-", SslIp);
+			RSACryptoServiceProvider store = new RSACryptoServiceProvider(csp);
+			store.ImportParameters(priv.ExportParameters(true));
+			store.PersistKeyInCsp = true;
 		}
 
 		private static void ReadSSLCert() {
-			X509Store store = new X509Store(StoreName.My, StoreLocation.CurrentUser);
-			store.Open(OpenFlags.ReadWrite);
-			X509CertificateCollection certs = store.Certificates.Find(X509FindType.FindBySubjectName, SslIp, false);
+			System.Security.Cryptography.X509Certificates.X509Store store = new System.Security.Cryptography.X509Certificates.X509Store(System.Security.Cryptography.X509Certificates.StoreName.My, System.Security.Cryptography.X509Certificates.StoreLocation.CurrentUser);
+			store.Open(System.Security.Cryptography.X509Certificates.OpenFlags.ReadWrite);
+			System.Security.Cryptography.X509Certificates.X509CertificateCollection certs = store.Certificates.Find(System.Security.Cryptography.X509Certificates.X509FindType.FindBySubjectName, SslIp, false);
 			do {
 				if (certs.Count > 0) {
-					Cert = (X509Certificate2) certs[0];
+					Cert = (System.Security.Cryptography.X509Certificates.X509Certificate2) certs[0];
 					if (Cert.NotAfter < DateTime.Now) {
 						store.Remove(Cert);
 						Cert = null;
 						continue;
 					}
-					CspParameters cp = new CspParameters();
-					cp.KeyContainerName = string.Format("github-zachdeibert-ssl-endpoint-", SslIp);
-					Cert.PrivateKey = new RSACryptoServiceProvider(cp);
+					CspParameters csp = new CspParameters();
+					csp.KeyContainerName = string.Concat("github-zachdeibert-ssl-endpoint-", SslIp);
+					Cert.PrivateKey = new RSACryptoServiceProvider(csp);
 				} else {
 					GenerateSSLCert();
 					store.Add(Cert);
