@@ -3,7 +3,9 @@ using System.IO;
 using System.Net;
 using System.Net.Security;
 using System.Net.Sockets;
+using System.Reflection;
 using System.Security.Cryptography;
+using System.ServiceProcess;
 using System.Threading;
 using Org.BouncyCastle.Asn1;
 using Org.BouncyCastle.Asn1.Pkcs;
@@ -27,6 +29,9 @@ namespace sslendpoint {
 		private static System.Security.Cryptography.X509Certificates.X509Certificate2 Cert;
 
 		private static void ParseArgs(string[] args) {
+			if (args.Length == 0) {
+				ServiceBase.Run(new Service());
+			}
 			if (args.Length < 1) {
 				Console.Error.WriteLine("Invalid ssl IP address");
 				Environment.Exit(1);
@@ -159,8 +164,7 @@ namespace sslendpoint {
 			}
 		}
 
-		public static void Main(string[] args) {
-			ParseArgs(args);
+		private static void Start() {
 			ReadSSLCert();
 			int lastMessage = 0;
 			while (true) {
@@ -207,6 +211,18 @@ namespace sslendpoint {
 					Console.Error.WriteLine(ex);
 				}
 			}
+		}
+
+		public static void ServiceMain() {
+			string asm = Uri.UnescapeDataString(new UriBuilder(Assembly.GetExecutingAssembly().CodeBase).Path);
+			string config = Path.Combine(Path.GetDirectoryName(asm), string.Concat(Path.GetFileName(asm), ".txt"));
+			ParseArgs(File.ReadAllLines(config));
+			Start();
+		}
+
+		public static void Main(string[] args) {
+			ParseArgs(args);
+			Start();
 		}
 	}
 }
