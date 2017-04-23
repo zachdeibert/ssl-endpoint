@@ -145,9 +145,15 @@ namespace sslendpoint {
             try {
                 addrs = Dns.GetHostAddresses(listenIp);
             } catch (Exception) {
-                addrs = new IPAddress[] {
-                    IPAddress.Parse(listenIp)
-                };
+				try {
+	                addrs = new IPAddress[] {
+	                    IPAddress.Parse(listenIp)
+	                };
+				} catch (Exception) {
+					addrs = new IPAddress[] {
+						IPAddress.Any
+					};
+				}
             }
 			if (addrs.Length > 0) {
 				TcpListener listener = new TcpListener(addrs[0], listenPort);
