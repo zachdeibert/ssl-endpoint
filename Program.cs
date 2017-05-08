@@ -126,17 +126,43 @@ namespace sslendpoint {
 
 		private static void WriteCallback(IAsyncResult iar) {
 			AsyncData data = (AsyncData) iar.AsyncState;
-			data.To.EndWrite(iar);
-			if (data.Client.Connected) {
-				data.From.BeginRead(data.Buffer, 0, data.Buffer.Length, ReadCallback, data);
+			try {
+				data.To.EndWrite(iar);
+				if (data.Client.Connected) {
+					data.From.BeginRead(data.Buffer, 0, data.Buffer.Length, ReadCallback, data);
+				}
+			} catch (Exception ex) {
+				Console.Error.WriteLine(ex);
+				try {
+					data.To.Close();
+					data.From.Close();
+					data.Client.Close();
+					data.Proxy.Close();
+					data.To.Dispose();
+					data.From.Dispose();
+				} catch {
+				}
 			}
 		}
 
 		private static void ReadCallback(IAsyncResult iar) {
 			AsyncData data = (AsyncData) iar.AsyncState;
-			int length = data.From.EndRead(iar);
-			if (data.Proxy.Connected) {
-				data.To.BeginWrite(data.Buffer, 0, length, WriteCallback, data);
+			try {
+				int length = data.From.EndRead(iar);
+				if (data.Proxy.Connected) {
+					data.To.BeginWrite(data.Buffer, 0, length, WriteCallback, data);
+				}
+			} catch (Exception ex) {
+				Console.Error.WriteLine(ex);
+				try {
+					data.To.Close();
+					data.From.Close();
+					data.Client.Close();
+					data.Proxy.Close();
+					data.To.Dispose();
+					data.From.Dispose();
+				} catch {
+				}
 			}
 		}
 
@@ -149,7 +175,8 @@ namespace sslendpoint {
 	                addrs = new IPAddress[] {
 	                    IPAddress.Parse(listenIp)
 	                };
-				} catch (Exception) {
+				} catch (Exception ex) {
+					Console.Error.WriteLine(ex);
 					addrs = new IPAddress[] {
 						IPAddress.Any
 					};
@@ -161,13 +188,17 @@ namespace sslendpoint {
 					listener.Start();
 					TcpClient client;
 					while ((client = listener.AcceptTcpClient()) != null) {
-						TcpClient proxy = new TcpClient(toIp, toPort);
-						Stream listen = listenStream(client.GetStream());
-						Stream to = toStream(proxy.GetStream());
-						AsyncData listenData = new AsyncData(client, proxy, listen, to);
-						listen.BeginRead(listenData.Buffer, 0, listenData.Buffer.Length, ReadCallback, listenData);
-						AsyncData toData = new AsyncData(client, proxy, to, listen);
-						to.BeginRead(toData.Buffer, 0, toData.Buffer.Length, ReadCallback, toData);
+						try {
+							TcpClient proxy = new TcpClient(toIp, toPort);
+							Stream listen = listenStream(client.GetStream());
+							Stream to = toStream(proxy.GetStream());
+							AsyncData listenData = new AsyncData(client, proxy, listen, to);
+							listen.BeginRead(listenData.Buffer, 0, listenData.Buffer.Length, ReadCallback, listenData);
+							AsyncData toData = new AsyncData(client, proxy, to, listen);
+							to.BeginRead(toData.Buffer, 0, toData.Buffer.Length, ReadCallback, toData);
+						} catch (Exception ex) {
+							Console.Error.WriteLine(ex);
+						}
 					}
 				} finally {
 					listener.Stop();
