@@ -227,6 +227,7 @@ namespace sslendpoint {
 		}
 
 		public static void ServiceMain() {
+			Logging.Init();
 			string asm = Uri.UnescapeDataString(new UriBuilder(Assembly.GetExecutingAssembly().CodeBase).Path);
 			string config = Path.Combine(Path.GetDirectoryName(asm), string.Concat(Path.GetFileName(asm), ".txt"));
 			ParseArgs(File.ReadAllLines(config));
@@ -234,6 +235,7 @@ namespace sslendpoint {
 		}
 
 		public static void Main(string[] args) {
+			Logging.Init();
 			ParseArgs(args);
 			Start();
 		}
