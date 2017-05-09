@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Reflection;
 
 namespace sslendpoint {
 	public class Logging : Stream {
@@ -63,7 +64,8 @@ namespace sslendpoint {
 		}
 
 		public static void Init() {
-			FileStream = File.Create("latest.log");
+			UriBuilder uri = new UriBuilder(Assembly.GetExecutingAssembly().CodeBase);
+			FileStream = File.Create(Path.Combine(Path.GetDirectoryName(Uri.UnescapeDataString(uri.Path)), "latest.log"));
 			StreamWriter stdout = new StreamWriter(new Logging(Console.OpenStandardOutput()));
 			stdout.AutoFlush = true;
 			Console.SetOut(stdout);
