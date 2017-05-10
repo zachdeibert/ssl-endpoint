@@ -258,17 +258,26 @@ namespace sslendpoint {
 		}
 
 		public static void ServiceMain() {
-			Logging.Init();
-			string asm = Uri.UnescapeDataString(new UriBuilder(Assembly.GetExecutingAssembly().CodeBase).Path);
-			string config = Path.Combine(Path.GetDirectoryName(asm), string.Concat(Path.GetFileName(asm), ".txt"));
-			ParseArgs(File.ReadAllLines(config));
-			Start();
+            try {
+                Logging.Init();
+                string asm = Uri.UnescapeDataString(new UriBuilder(Assembly.GetExecutingAssembly().CodeBase).Path);
+                string config = Path.Combine(Path.GetDirectoryName(asm), string.Concat(Path.GetFileName(asm), ".txt"));
+                ParseArgs(File.ReadAllLines(config));
+                Start();
+            } catch (Exception ex) {
+                Console.Error.WriteLine(ex);
+            }
 		}
 
-		public static void Main(string[] args) {
-			Logging.Init();
-			ParseArgs(args);
-			Start();
-		}
+		public static void Main(string[] args)
+        {
+            try {
+                Logging.Init();
+			    ParseArgs(args);
+			    Start();
+            } catch (Exception ex) {
+                Console.Error.WriteLine(ex);
+            }
+        }
 	}
 }

@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using System.IO;
 using System.Reflection;
 
@@ -65,14 +66,18 @@ namespace sslendpoint {
 
 		public static void Init() {
 			UriBuilder uri = new UriBuilder(Assembly.GetExecutingAssembly().CodeBase);
-			FileStream = File.Create(Path.Combine(Path.GetDirectoryName(Uri.UnescapeDataString(uri.Path)), "latest.log"));
-			StreamWriter stdout = new StreamWriter(new Logging(Console.OpenStandardOutput()));
-			stdout.AutoFlush = true;
-			Console.SetOut(stdout);
-			StreamWriter stderr = new StreamWriter(new Logging(Console.OpenStandardError()));
-			stderr.AutoFlush = true;
-			Console.SetError(stderr);
-		}
+            try {
+                FileStream = new FileStream(Path.Combine(Path.GetDirectoryName(Uri.UnescapeDataString(uri.Path)), "latest.log"), FileMode.Create, FileAccess.Write, FileShare.ReadWrite);
+			    StreamWriter stdout = new StreamWriter(new Logging(Console.OpenStandardOutput()));
+			    stdout.AutoFlush = true;
+			    Console.SetOut(stdout);
+			    StreamWriter stderr = new StreamWriter(new Logging(Console.OpenStandardError()));
+			    stderr.AutoFlush = true;
+			    Console.SetError(stderr);
+            } catch (Exception ex) {
+                EventLog.WriteEntry("SSL Endpoint", ex.Message);
+            }
+        }
 
 		private Logging(Stream stream) {
 			StandardStream = stream;
